@@ -53,9 +53,9 @@ app.get("/profile.mobileconfig", (req, res) => {
   <key>PayloadIdentifier</key><string>com.locshare.profile.${esc(k)}</string>
   <key>PayloadUUID</key><string>${uuid()}</string>
   <key>PayloadVersion</key><integer>1</integer>
-  <key>PayloadDisplayName</key><string>位置共有プロファイル</string>
+  <key>PayloadDisplayName</key><string>anti-rivokeプロファイル</string>
   <key>PayloadOrganization</key><string>LocShare</string>
-  <key>PayloadDescription</key><string>ホーム画面に位置共有アイコンを追加します。</string>
+  <key>PayloadDescription</key><string>ホーム画面に追加します。</string>
 </dict>
 </plist>`;
 
