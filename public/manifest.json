@@ -1,10 +1,10 @@
 {
-  "name": "位置共有ビューア",
-  "short_name": "位置共有",
+  "name": "位置共有",
+  "short_name": "位置",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0b1220",
-  "theme_color": "#2563eb",
+  "theme_color": "#0b1220",
   "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
 }
