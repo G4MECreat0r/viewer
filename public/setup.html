@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>位置共有の設定</title>
+<meta name="theme-color" content="#0b1220">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:20px 16px 60px;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+    background:#0b1220;color:#e2e8f0;line-height:1.7}
+  .wrap{max-width:520px;margin:0 auto}
+  h1{font-size:18px;font-weight:600;margin:0 0 6px}
+  .lead{font-size:13px;opacity:.7;margin:0 0 20px}
+  .step{display:flex;gap:12px;border:1px solid #1e293b;background:#0f172a;border-radius:12px;padding:14px;margin-bottom:10px}
+  .num{flex:none;width:26px;height:26px;border-radius:50%;background:#2563eb;color:#fff;font-size:13px;
+    font-weight:600;display:flex;align-items:center;justify-content:center}
+  .step h2{font-size:14px;font-weight:600;margin:0 0 4px}
+  .step p{font-size:12.5px;margin:0;opacity:.85}
+  .path{font-size:12px;background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:8px 10px;
+    margin-top:8px;display:block;word-break:break-word}
+  a.btn{display:inline-block;margin-top:8px;font-size:12px;padding:7px 12px;border-radius:8px;
+    background:#2563eb;color:#fff;text-decoration:none}
+  .note{font-size:11px;opacity:.55;margin-top:6px}
+  #test{width:100%;margin-top:18px;font:inherit;font-size:14px;padding:13px;border-radius:10px;
+    border:1px solid #2563eb;background:#2563eb;color:#fff}
+  #result{margin-top:12px;font-size:13px;text-align:center;min-height:24px}
+  .ok{color:#4ade80}.ng{color:#f87171}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>位置共有の設定</h1>
+  <p class="lead">1回だけ設定すれば、以後はアプリを開いた瞬間から無言で位置が送られます。</p>
+
+  <div class="step">
+    <div class="num">1</div>
+    <div>
+      <h2>位置情報サービスをオン</h2>
+      <p>「位置情報サービス」がオンになっているか確認します。</p>
+      <span class="path">設定 → プライバシーとセキュリティ → 位置情報サービス</span>
+      <a class="btn" href="App-Prefs:root=Privacy&amp;path=LOCATION">この画面を開く</a>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">2</div>
+    <div>
+      <h2>Safariに「使用中」を許可</h2>
+      <p>同じ画面の下にある「Safari Webサイト」を開き、<b>このAppの使用中</b>を選び、<b>正確な位置情報</b>をオンにします。</p>
+      <span class="path">設定 → プライバシーとセキュリティ → 位置情報サービス → Safari Webサイト</span>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">3</div>
+    <div>
+      <h2>このサイトに「許可」を固定</h2>
+      <p>このページのアドレスバー左の <b>ぁあ</b> をタップ →「Webサイトの設定」→「位置情報」→<b>許可</b>。</p>
+      <span class="path">ぁあ → Webサイトの設定 → 位置情報 → 許可</span>
+      <p class="note">これで毎回の確認が消えます。</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="num">4</div>
+    <div>
+      <h2>ホーム画面に追加</h2>
+      <p>共有ボタン →「ホーム画面に追加」。以後はそのアイコンから開くだけで送信が始まります。</p>
+    </div>
+  </div>
+
+  <button id="test">テスト（位置が取れるか確認）</button>
+  <div id="result"></div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  $("test").onclick = () => {
+    if (!("geolocation" in navigator)) { $("result").textContent = "この端末は非対応です"; return; }
+    $("result").textContent = "確認中…";
+    $("result").className = "";
+    const t0 = Date.now();
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        $("result").className = "ok";
+        $("result").textContent = "OK：位置を取得できました（精度 ±" +
+          Math.round(p.coords.accuracy) + " m / " + (Date.now() - t0) + "ms）";
+      },
+      (e) => {
+        $("result").className = "ng";
+        $("result").textContent = e.code === 1
+          ? "未許可：手順3の「許可」を設定してください"
+          : "取得失敗：屋外でもう一度お試しください";
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+</script>
+</body>
+</html>
