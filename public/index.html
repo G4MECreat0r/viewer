@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>位置共有ビューア</title>
+<meta name="theme-color" content="#2563eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Hiragino Sans","Noto Sans JP",sans-serif;
+       background:#f8fafc;color:#0f172a;overflow:hidden}
+  #map{position:fixed;inset:0}
+  header{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+    padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top));
+    background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid #e2e8f0}
+  header .title{font-size:14px;font-weight:600}
+  header .spacer{flex:1}
+  .badge{font-size:11px;padding:3px 10px;border-radius:999px;background:#e5e7eb;color:#374151;white-space:nowrap}
+  .badge.ok{background:#bbf7d0;color:#14532d}
+  .badge.warn{background:#fde68a;color:#78350f}
+  .badge.err{background:#fecaca;color:#7f1d1d}
+  button{font:inherit;font-size:12px;padding:7px 13px;border-radius:8px;cursor:pointer;
+    border:1px solid #d1d5db;background:#fff;color:#374151}
+  button.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+  button:active{transform:translateY(1px)}
+  #panel{position:fixed;left:0;right:0;bottom:0;z-index:1000;
+    padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom));
+    background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-top:1px solid #e2e8f0;max-height:52vh;overflow:auto}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  .row label{font-size:11px;opacity:.7}
+  input{font:inherit;font-size:13px;padding:6px 9px;border:1px solid #d1d5db;border-radius:8px;background:transparent;color:inherit}
+  #room{width:110px;text-transform:uppercase;letter-spacing:1px;font-weight:600}
+  #name{width:110px}
+  #peers{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .peer{border:1px solid #e5e7eb;border-radius:8px;padding:7px 9px;display:flex;gap:8px;align-items:center}
+  .dot{width:10px;height:10px;border-radius:50%;flex:none}
+  .peer .nm{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .peer .sub{font-size:10px;opacity:.6}
+  .hint{font-size:11px;opacity:.7;margin-top:8px;line-height:1.5}
+  .pin{transform:translate(-50%,-50%);padding:2px 7px;border-radius:999px;color:#fff;font-size:11px;
+       font-weight:600;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .pin.self{outline:2px solid #fff}
+  @media (prefers-color-scheme:dark){
+    body{background:#0b1220;color:#e2e8f0}
+    header,#panel{background:rgba(15,23,42,.92);border-color:#1e293b}
+    .peer{border-color:#1e293b}
+    button{background:#0f172a;color:#e2e8f0;border-color:#334155}
+    button.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+    .badge{background:#1e293b;color:#cbd5e1}
+  }
+</style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <header>
+    <span class="title">位置共有</span>
+    <span id="status" class="badge">未接続</span>
+    <span class="spacer"></span>
+    <button id="fitBtn">全体表示</button>
+    <button id="shareBtn">リンク共有</button>
+    <button id="startBtn" class="primary">位置を送信</button>
+    <button id="stopBtn">停止</button>
+  </header>
+
+  <section id="panel">
+    <div class="row">
+      <label>ルーム</label><input id="room" readonly>
+      <label>名前</label><input id="name" maxlength="8">
+      <button id="joinBtn">参加し直す</button>
+    </div>
+    <div id="peers"></div>
+    <div class="hint">同じルームの端末が地図に出ます。相手には「リンク共有」でURLを送るだけ。</div>
+  </section>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var $ = function (id) { return document.getElementById(id); };
+
+    /* ---------- 地図 ---------- */
+    var dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    var tiles = dark
+      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=cb1_2nve_1_afe1da6ca18e958f7724fb54"
+      : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_2nve_1_afe1da6ca18e958f7724fb54";
+    var map = L.map("map", { zoomControl: false }).setView([35.6812, 139.7671], 14);
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.tileLayer(tiles, { attribution: "© OpenStreetMap © CartoDB", maxZoom: 19 }).addTo(map);
+    setTimeout(function () { map.invalidateSize(); }, 150);
+
+    /* ---------- ヘルパ ---------- */
+    var COLORS = ["#2563eb","#e11d48","#059669","#d97706","#7c3aed","#0891b2","#db2777","#4d7c0f"];
+    var genCode = function () { return Math.random().toString(36).slice(2, 8).toUpperCase(); };
+    var hash = function (s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+    var colorFor = function (id) { return COLORS[hash(id) % COLORS.length]; };
+    function haversine(a, b) {
+      var R = 6371000, rad = Math.PI / 180;
+      var dLat = (b[0]-a[0])*rad, dLng = (b[1]-a[1])*rad, la1 = a[0]*rad, la2 = b[0]*rad;
+      var h = Math.sin(dLat/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)**2;
+      return 2*R*Math.asin(Math.sqrt(h));
+    }
+
+    /* ---------- 状態 ---------- */
+    var room = (location.hash.match(/room=([A-Za-z0-9]+)/) || [])[1] || genCode();
+    var name = localStorage.getItem("rtloc_name") || ("端末" + Math.floor(Math.random()*90 + 10));
+    var ws = null, retry = 0, sharing = false;
+    var myPos = null, myAcc = null, mySpd = null;
+    var selfMarker = null, selfCircle = null, fitDone = false;
+    var peers = {};
+
+    function setStatus(t, cls) { var s = $("status"); s.textContent = t; s.className = "badge" + (cls ? " " + cls : ""); }
+
+    /* ---------- マーカー ---------- */
+    function makeIcon(color, label, isSelf) {
+      return L.divIcon({ className: "", iconSize: [0, 0],
+        html: '<div class="pin' + (isSelf ? " self" : "") + '" style="background:' + color + '">' + label + "</div>" });
+    }
+    function drawSelf(lat, lng, acc) {
+      var pt = [lat, lng];
+      if (!selfMarker) {
+        selfMarker = L.marker(pt, { icon: makeIcon("#111827", "自分", true), zIndexOffset: 1000 }).addTo(map);
+        selfCircle = L.circle(pt, { radius: acc, color: "#111827", weight: 1, fillOpacity: 0.08 }).addTo(map);
+      } else { selfMarker.setLatLng(pt); selfCircle.setLatLng(pt).setRadius(acc); }
+      if (!fitDone) { map.setView(pt, 15); fitDone = true; }
+    }
+    function upsertPeer(id, d) {
+      var pt = [d.lat, d.lng], p = peers[id];
+      if (!p) {
+        var c = colorFor(id), lbl = (d.n || "端末").toString().slice(0, 8);
+        p = peers[id] = { color: c, label: lbl,
+          marker: L.marker(pt, { icon: makeIcon(c, lbl, false) }).addTo(map),
+          circle: L.circle(pt, { radius: d.acc || 10, color: c, weight: 1, fillColor: c, fillOpacity: 0.08 }).addTo(map) };
+      } else {
+        p.marker.setLatLng(pt); p.circle.setLatLng(pt).setRadius(d.acc || 10);
+        if (d.n && d.n !== p.label) { p.label = d.n.toString().slice(0, 8); p.marker.setIcon(makeIcon(p.color, p.label, false)); }
+      }
+      p.data = d; p.last = Date.now(); renderPeers();
+    }
+    function removePeer(id) {
+      var p = peers[id]; if (!p) return;
+      map.removeLayer(p.marker); map.removeLayer(p.circle); delete peers[id]; renderPeers();
+    }
+    function renderPeers() {
+      var ids = Object.keys(peers);
+      if (!ids.length) { $("peers").innerHTML = '<div class="peer" style="opacity:.6"><span class="nm">相手の参加を待っています…</span></div>'; return; }
+      $("peers").innerHTML = ids.map(function (id) {
+        var p = peers[id];
+        var dist = myPos ? (haversine(myPos, [p.data.lat, p.data.lng]) / 1000).toFixed(2) + " km" : "—";
+        return '<div class="peer"><span class="dot" style="background:' + p.color + '"></span>' +
+               '<div style="min-width:0"><div class="nm">' + p.label + '</div><div class="sub">' + dist + "</div></div></div>";
+      }).join("");
+    }
+
+    /* ---------- WebSocket ---------- */
+    function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+    function connect() {
+      var proto = location.protocol === "https:" ? "wss:" : "ws:";
+      ws = new WebSocket(proto + "//" + location.host + "/ws");
+      ws.onopen = function () { retry = 0; setStatus("接続済", "ok"); send({ type: "join", room: room, name: name }); publishPos(); };
+      ws.onmessage = function (e) {
+        var m; try { m = JSON.parse(e.data); } catch (x) { return; }
+        if (m.type === "peers") m.peers.forEach(function (p) { upsertPeer(p.id, p); });
+        else if (m.type === "pos") upsertPeer(m.id, m);
+        else if (m.type === "left") removePeer(m.id);
+      };
+      ws.onclose = function () { setStatus("切断", "warn"); setTimeout(connect, Math.min(1000 * ++retry, 8000)); };
+      ws.onerror = function () { setStatus("接続エラー", "err"); };
+    }
+    function publishPos() { if (myPos) send({ type: "pos", lat: myPos[0], lng: myPos[1], acc: myAcc, spd: mySpd }); }
+
+    /* ---------- 位置取得 ---------- */
+    var watchId = null, pubTimer = null, simTimer = null, simPos = null;
+    function onPos(lat, lng, acc, spd) { myPos = [lat, lng]; myAcc = acc; mySpd = spd; drawSelf(lat, lng, acc); publishPos(); renderPeers(); }
+    function startSim() {
+      if (simTimer) return;
+      simPos = simPos || { lat: 35.6812, lng: 139.7671, dir: 0 };
+      simTimer = setInterval(function () {
+        simPos.dir += (Math.random() - 0.5) * 0.6;
+        var s = 0.00006;
+        simPos.lat += Math.cos(simPos.dir) * s; simPos.lng += Math.sin(simPos.dir) * s;
+        onPos(simPos.lat, simPos.lng, 9, 1.3);
+      }, 1000);
+    }
+    function startSharing() {
+      sharing = true;
+      if (!("geolocation" in navigator)) { startSim(); return; }
+      var got = false;
+      watchId = navigator.geolocation.watchPosition(function (p) {
+        got = true; onPos(p.coords.latitude, p.coords.longitude, p.coords.accuracy, p.coords.speed);
+      }, function () { if (!got) startSim(); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 });
+      setTimeout(function () { if (!got) startSim(); }, 3500);
+      pubTimer = setInterval(publishPos, 3000);
+    }
+    function stopSharing() {
+      sharing = false;
+      if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+      if (pubTimer) { clearInterval(pubTimer); pubTimer = null; }
+      if (simTimer) { clearInterval(simTimer); simTimer = null; }
+      setStatus("停止", "");
+    }
+
+    /* ---------- UI ---------- */
+    $("room").value = room;
+    $("name").value = name;
+    history.replaceState(null, "", "#room=" + room);
+
+    $("startBtn").onclick = function () { startSharing(); };
+    $("stopBtn").onclick = stopSharing;
+    $("joinBtn").onclick = function () {
+      name = ($("name").value || "端末").slice(0, 8);
+      localStorage.setItem("rtloc_name", name);
+      room = ($("room").value || genCode()).toUpperCase();
+      history.replaceState(null, "", "#room=" + room);
+      Object.keys(peers).forEach(removePeer);
+      send({ type: "join", room: room, name: name });
+    };
+    $("shareBtn").onclick = function () {
+      var url = location.origin + location.pathname + "#room=" + room;
+      var done = function () { var b = $("shareBtn"), t = b.textContent; b.textContent = "コピー済"; setTimeout(function () { b.textContent = t; }, 1200); };
+      if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, done); else done();
+    };
+    $("fitBtn").onclick = function () {
+      var pts = [];
+      if (myPos) pts.push(myPos);
+      Object.keys(peers).forEach(function (id) { pts.push([peers[id].data.lat, peers[id].data.lng]); });
+      if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.3));
+    };
+
+    setInterval(function () {
+      var now = Date.now();
+      Object.keys(peers).forEach(function (id) { if (now - peers[id].last > 30000) removePeer(id); });
+    }, 5000);
+
+    renderPeers();
+    connect();
+  })();
+  </script>
+</body>
+</html>
