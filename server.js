@@ -12,6 +12,8 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 app.get("/s", (_req, res) => res.sendFile(path.join(__dirname, "public", "sharer.html")));
 app.get("/watch", (_req, res) => res.sendFile(path.join(__dirname, "public", "watch.html")));
+app.get("/setup", (_req, res) => res.sendFile(path.join(__dirname, "public", "setup.html")));
+app.get("/healthz", (_req, res) => res.send("ok"));
 
 /* ---------- プロファイル配布 ---------- */
 function uuid() {
@@ -20,7 +22,8 @@ function uuid() {
     return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
   });
 }
-const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = (s) =>
+  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 app.get("/profile.mobileconfig", (req, res) => {
   const k = String(req.query.k || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 40) || "default";
@@ -87,7 +90,8 @@ wss.on("connection", (ws) => {
   ws.on("pong", () => { ws.isAlive = true; });
 
   ws.on("message", (raw) => {
-    let m; try { m = JSON.parse(raw.toString()); } catch { return; }
+    let m;
+    try { m = JSON.parse(raw.toString()); } catch { return; }
 
     if (m.type === "join") {
       leave(ws);
@@ -112,7 +116,10 @@ wss.on("connection", (ws) => {
       if (c) { c.lat = m.lat; c.lng = m.lng; c.acc = m.acc; c.spd = m.spd; c.ts = Date.now(); }
       for (const cl of r.values()) {
         if (cl.role === "watch") {
-          send(cl.ws, { type: "pos", id: ws.id, n: ws.name, lat: m.lat, lng: m.lng, acc: m.acc, spd: m.spd, ts: Date.now() });
+          send(cl.ws, {
+            type: "pos", id: ws.id, n: ws.name,
+            lat: m.lat, lng: m.lng, acc: m.acc, spd: m.spd, ts: Date.now()
+          });
         }
       }
     }
@@ -125,7 +132,8 @@ wss.on("connection", (ws) => {
 setInterval(() => {
   wss.clients.forEach((ws) => {
     if (!ws.isAlive) return ws.terminate();
-    ws.isAlive = false; ws.ping();
+    ws.isAlive = false;
+    ws.ping();
   });
 }, 30000);
 
