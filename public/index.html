@@ -5,26 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LocShare 発行</title>
 <style>
-  *{box-sizing:border-box}
-  body{font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;background:#0b1220;color:#e2e8f0;
-    margin:0;padding:24px 16px 60px;line-height:1.6}
-  .wrap{max-width:520px;margin:0 auto}
-  h1{font-size:18px;font-weight:600;margin:0 0 6px}
-  .lead{font-size:13px;opacity:.7;margin:0 0 18px}
-  input{font:inherit;padding:9px 10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;width:58%}
+  body{font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;background:#0b1220;color:#e2e8f0;margin:0;padding:24px;line-height:1.6}
+  .wrap{max-width:560px;margin:0 auto}
+  h1{font-size:18px;font-weight:600}
+  input{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;width:60%}
   button{font:inherit;padding:9px 16px;border-radius:8px;border:1px solid #2563eb;background:#2563eb;color:#fff;cursor:pointer}
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .card{border:1px solid #1e293b;border-radius:12px;padding:14px;margin-top:16px;background:#0f172a}
-  a.big{display:block;padding:14px;border-radius:10px;background:#2563eb;color:#fff;text-decoration:none;
-    text-align:center;font-size:14px;font-weight:600;margin-bottom:10px}
-  a.alt{background:#1e293b;border:1px solid #334155}
-  .nm{font-size:13px;font-weight:600;margin-bottom:10px}
+  .lbl{font-size:11px;opacity:.6;margin-bottom:4px}
+  .val{font-size:13px;word-break:break-all;background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:8px;margin-bottom:10px}
+  a{color:#60a5fa}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>LocShare 発行</h1>
-  <p class="lead">相手の名前を入れて発行 → プロファイルを送るだけ。</p>
+  <p style="font-size:13px;opacity:.7">相手の名前を入れて発行 → プロファイルを送るだけ。監視URLは自分だけが開きます。</p>
 
   <div class="row">
     <input id="name" placeholder="相手の名前（例: 太郎）" maxlength="20">
@@ -32,32 +28,34 @@
   </div>
 
   <div id="out" class="card" style="display:none">
-    <div class="nm" id="who"></div>
-    <a class="big" id="profile" href="#" download>プロファイルをダウンロード</a>
-    <a class="big alt" id="watch" href="#" target="_blank">監視画面を開く</a>
+    <div class="lbl">① 相手に送るプロファイル</div>
+    <div class="val"><a id="profile" href="#" download>locshare.mobileconfig をダウンロード</a></div>
+
+    <div class="lbl">② 相手に送るURL（プロファイルが嫌な人向け）</div>
+    <div class="val" id="shareUrl"></div>
+
+    <div class="lbl">③ 自分が開く監視画面</div>
+    <div class="val"><a id="watch" href="#" target="_blank">監視画面を開く</a></div>
+
+    <div class="row">
+      <a id="qr" target="_blank"><img id="qrimg" alt="QR" style="width:150px;height:150px;background:#fff;border-radius:8px"></a>
+    </div>
   </div>
 </div>
-
 <script>
   const $ = (id) => document.getElementById(id);
   const genKey = () => Math.random().toString(36).slice(2, 6) + Math.random().toString(36).slice(2, 6);
 
-  $("make").onclick = async () => {
+  $("make").onclick = () => {
     const name = ($("name").value || "相手").slice(0, 20);
     const k = genKey();
     const base = location.origin;
-
-    try {
-      await fetch("/api/room", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ k, name })
-      });
-    } catch (e) {}
-
-    $("who").textContent = name + " さん";
     $("profile").href = base + "/profile.mobileconfig?k=" + k + "&name=" + encodeURIComponent(name);
+    $("shareUrl").textContent = base + "/s?k=" + k;
     $("watch").href = base + "/watch?k=" + k;
+    $("qr").href = base + "/profile.mobileconfig?k=" + k + "&name=" + encodeURIComponent(name);
+    $("qrimg").src = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" +
+      encodeURIComponent(base + "/profile.mobileconfig?k=" + k + "&name=" + name);
     $("out").style.display = "block";
   };
 </script>
