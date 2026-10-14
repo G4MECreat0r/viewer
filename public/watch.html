@@ -14,35 +14,24 @@
   header{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;gap:8px;align-items:center;
     padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top));
     background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid #e2e8f0}
-  #who{font-size:15px;font-weight:600}
   .badge{font-size:11px;padding:3px 10px;border-radius:999px;background:#e5e7eb}
   .badge.ok{background:#bbf7d0;color:#14532d}
   .spacer{flex:1}
   button{font:inherit;font-size:12px;padding:7px 13px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:#374151}
-  #panel{position:fixed;left:0;right:0;bottom:0;z-index:1000;padding:12px;
-    padding-bottom:calc(12px + env(safe-area-inset-bottom));
+  #panel{position:fixed;left:0;right:0;bottom:0;z-index:1000;padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom));
     background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-top:1px solid #e2e8f0;max-height:46vh;overflow:auto}
-  #peers{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+  #peers{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
   .peer{border:1px solid #e5e7eb;border-radius:8px;padding:7px 9px;display:flex;gap:8px;align-items:center}
   .dot{width:10px;height:10px;border-radius:50%;flex:none}
   .nm{font-size:12px;font-weight:500}
   .sub{font-size:10px;opacity:.6}
-  .pin{transform:translate(-50%,-50%);padding:2px 7px;border-radius:999px;color:#fff;font-size:11px;
-    font-weight:600;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3)}
-  .pin.off{opacity:.55}
-  @media (prefers-color-scheme:dark){
-    body{background:#0b1220;color:#e2e8f0}
-    header,#panel{background:rgba(15,23,42,.92);border-color:#1e293b}
-    .peer{border-color:#1e293b}
-    button{background:#0f172a;color:#e2e8f0;border-color:#334155}
-    .badge{background:#1e293b;color:#cbd5e1}
-  }
+  .pin{transform:translate(-50%,-50%);padding:2px 7px;border-radius:999px;color:#fff;font-size:11px;font-weight:600;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 </style>
 </head>
 <body>
   <div id="map"></div>
   <header>
-    <span id="who">監視</span>
+    <strong style="font-size:14px">監視</strong>
     <span id="status" class="badge">未接続</span>
     <span class="spacer"></span>
     <button id="fit">全体表示</button>
@@ -58,92 +47,61 @@
     const hash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
     const colorFor = (id) => COLORS[hash(id) % COLORS.length];
 
-    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-    const tiles = dark
-      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=cb1_2nve_1_afe1da6ca18e958f7724fb54"
-      : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_2nve_1_afe1da6ca18e958f7724fb54";
     const map = L.map("map", { zoomControl: false }).setView([35.6812, 139.7671], 14);
     L.control.zoom({ position: "bottomright" }).addTo(map);
-    L.tileLayer(tiles, { attribution: "© OpenStreetMap © CartoDB", maxZoom: 19 }).addTo(map);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_2nve_1_afe1da6ca18e958f7724fb54",
+      { attribution: "© OpenStreetMap © CartoDB", maxZoom: 19 }).addTo(map);
     setTimeout(() => map.invalidateSize(), 150);
 
     const peers = {};
-    let ws = null, retry = 0, first = true, roomName = "";
+    let ws = null, retry = 0, first = true;
 
-    const icon = (c, l, off) => L.divIcon({ className: "", iconSize: [0, 0],
-      html: '<div class="pin' + (off ? " off" : "") + '" style="background:' + c + '">' + l + "</div>" });
+    const icon = (c, l) => L.divIcon({ className: "", iconSize: [0,0],
+      html: '<div class="pin" style="background:' + c + '">' + l + "</div>" });
 
-    function ago(ts) {
-      const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
-      if (s < 60) return s + "秒前";
-      if (s < 3600) return Math.round(s / 60) + "分前";
-      if (s < 86400) return Math.round(s / 3600) + "時間前";
-      return Math.round(s / 86400) + "日前";
-    }
-
-    function upsert(p) {
-      const lbl = (p.n || roomName || "相手").slice(0, 8);
-      let e = peers[p.id];
-      if (!e) {
-        const c = colorFor(p.id);
-        e = peers[p.id] = { color: c, label: lbl,
-          marker: L.marker([p.lat || 0, p.lng || 0], { icon: icon(c, lbl, !p.online) }).addTo(map),
-          circle: L.circle([p.lat || 0, p.lng || 0], { radius: p.acc || 10, color: c, weight: 1, fillColor: c, fillOpacity: 0.1 }).addTo(map) };
+    function upsert(id, d) {
+      const pt = [d.lat, d.lng];
+      let p = peers[id];
+      if (!p) {
+        const c = colorFor(id), lbl = (d.n || "相手").slice(0, 8);
+        p = peers[id] = { color: c, label: lbl,
+          marker: L.marker(pt, { icon: icon(c, lbl) }).addTo(map),
+          circle: L.circle(pt, { radius: d.acc || 10, color: c, weight: 1, fillColor: c, fillOpacity: 0.1 }).addTo(map) };
+      } else {
+        p.marker.setLatLng(pt); p.circle.setLatLng(pt).setRadius(d.acc || 10);
       }
-      if (typeof p.lat === "number" && typeof p.lng === "number") {
-        e.marker.setLatLng([p.lat, p.lng]);
-        e.circle.setLatLng([p.lat, p.lng]).setRadius(p.acc || 10);
-        if (first) { map.setView([p.lat, p.lng], 16); first = false; }
-      }
-      e.data = p;
-      e.marker.setIcon(icon(e.color, lbl, !p.online));
+      p.data = d; p.last = Date.now();
+      if (first) { map.setView(pt, 16); first = false; }
       render();
     }
-
+    function remove(id) { const p = peers[id]; if (!p) return; map.removeLayer(p.marker); map.removeLayer(p.circle); delete peers[id]; render(); }
     function render() {
       const ids = Object.keys(peers);
-      $("peers").innerHTML = ids.length
-        ? ids.map((id) => {
-            const e = peers[id], d = e.data;
-            const on = d.online;
-            return '<div class="peer"><span class="dot" style="background:' + (on ? e.color : "#9ca3af") + '"></span>' +
-                   '<div><div class="nm">' + (d.n || roomName || "相手") + '</div>' +
-                   '<div class="sub">' + (on ? "オンライン" : "オフライン") +
-                   ' ・ ' + ago(d.ts) +
-                   (typeof d.acc === "number" ? ' ・ ±' + Math.round(d.acc) + 'm' : '') +
-                   '</div></div></div>';
-          }).join("")
-        : '<div class="peer" style="opacity:.6"><span class="nm">相手が開くのを待っています…</span></div>';
+      $("peers").innerHTML = ids.length ? ids.map((id) => {
+        const p = peers[id];
+        const age = Math.round((Date.now() - p.last) / 1000);
+        return '<div class="peer"><span class="dot" style="background:' + p.color + '"></span>' +
+               '<div><div class="nm">' + p.label + '</div>' +
+               '<div class="sub">精度 ±' + Math.round(p.data.acc || 0) + ' m ・ ' + age + 's前</div></div></div>';
+      }).join("") : '<div class="peer" style="opacity:.6"><span class="nm">相手の送信を待っています…</span></div>';
     }
 
     function connect() {
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       ws = new WebSocket(proto + "//" + location.host + "/ws");
-      ws.onopen = () => {
-        retry = 0;
-        $("status").textContent = "接続済"; $("status").className = "badge ok";
-        ws.send(JSON.stringify({ type: "join", room: k, role: "watch" }));
-      };
+      ws.onopen = () => { retry = 0; $("status").textContent = "接続済"; $("status").className = "badge ok";
+        ws.send(JSON.stringify({ type: "join", room: k, role: "watch" })); };
       ws.onmessage = (e) => {
         let m; try { m = JSON.parse(e.data); } catch { return; }
-        if (m.type === "init") {
-          roomName = m.name || "";
-          document.title = roomName ? roomName + " 監視" : "監視";
-          $("who").textContent = roomName || "監視";
-          m.peers.forEach(upsert);
-        } else if (m.type === "pos" || m.type === "peer") {
-          upsert(m.peer);
-        }
+        if (m.type === "peers") m.peers.forEach((p) => upsert(p.id, p));
+        else if (m.type === "pos") upsert(m.id, m);
+        else if (m.type === "left") remove(m.id);
       };
-      ws.onclose = () => {
-        $("status").textContent = "切断"; $("status").className = "badge";
-        setTimeout(connect, Math.min(1000 * ++retry, 8000));
-      };
+      ws.onclose = () => { $("status").textContent = "切断"; $("status").className = "badge"; setTimeout(connect, Math.min(1000 * ++retry, 8000)); };
     }
 
     $("fit").onclick = () => {
-      const pts = Object.keys(peers).filter((id) => peers[id].data.lat != null)
-        .map((id) => [peers[id].data.lat, peers[id].data.lng]);
+      const pts = Object.keys(peers).map((id) => [peers[id].data.lat, peers[id].data.lng]);
       if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.3));
     };
     setInterval(render, 5000);
