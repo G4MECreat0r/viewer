@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>プロファイル</title>
+<title>位置共有</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b1220">
 <link rel="manifest" href="manifest.json">
@@ -22,26 +22,26 @@
 </head>
 <body>
   <div class="box">
-    <h1><span id="dot" class="dot"></span>anti-rivokeを適応しています</h1>
+    <h1><span id="dot" class="dot"></span>位置を共有中</h1>
     <p id="msg">このページは開いたままにしてください</p>
     <div id="acc"></div>
-    <button id="go" style="display:none">適応を開始する</button>
+    <button id="go" style="display:none">位置共有を開始</button>
   </div>
 
 <script>
   const $ = (id) => document.getElementById(id);
   const k = (location.search.match(/[?&]k=([A-Za-z0-9]+)/) || [])[1] || "default";
-  let ws = null, retry = 0, watchId = null, last = null;
+
+  // 端末ごとに固定のID（再読み込みしても同じ相手として扱われる）
+  let did = localStorage.getItem("locshare_did");
+  if (!did) { did = Math.random().toString(36).slice(2, 12); localStorage.setItem("locshare_did", did); }
+
+  let ws = null, retry = 0, last = null;
 
   function connect() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     ws = new WebSocket(proto + "//" + location.host + "/ws");
-    ws.onopen = () => {
-      retry = 0;
-      $("dot").className = "dot on";
-      send({ type: "join", room: k, role: "share" });
-      push();
-    };
+    ws.onopen = () => { retry = 0; $("dot").className = "dot on"; send({ type: "join", room: k, role: "share", did }); push(); };
     ws.onclose = () => { $("dot").className = "dot"; setTimeout(connect, Math.min(1000 * ++retry, 8000)); };
     ws.onerror = () => { $("dot").className = "dot err"; };
   }
@@ -50,28 +50,25 @@
 
   function start() {
     if (!("geolocation" in navigator)) { $("msg").textContent = "この端末は位置情報非対応です"; return; }
-    watchId = navigator.geolocation.watchPosition((p) => {
+    navigator.geolocation.watchPosition((p) => {
       const c = p.coords;
       last = [c.latitude, c.longitude, c.accuracy, c.speed];
       $("dot").className = "dot on";
-      $("msg").textContent = "適応中";
-      $("acc").textContent = "" + Math.round(c.accuracy) + " m";
+      $("msg").textContent = "位置を共有中";
+      $("acc").textContent = "精度 ±" + Math.round(c.accuracy) + " m";
       push();
     }, () => {
       $("dot").className = "dot err";
-      $("msg").textContent = "";
+      $("msg").textContent = "位置情報を許可してください";
       $("go").style.display = "inline-block";
     }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
 
-    // プロンプトが出ない環境の後押し
     setTimeout(() => {
       navigator.geolocation.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: true });
     }, 600);
 
     setInterval(push, 3000);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") push();
-    });
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") push(); });
   }
 
   $("go").onclick = () => { $("go").style.display = "none"; start(); };
